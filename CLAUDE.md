@@ -10,7 +10,7 @@ Century: Spice Road RL environment for the [Jumanji](https://github.com/instadee
 
 ```bash
 # Install (editable with dev dependencies)
-pip install -e ".[dev]"
+uv sync --extra dev
 
 # Run all tests
 pytest century_env/tests/ -v
