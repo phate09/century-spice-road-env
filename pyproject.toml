@@ -1,0 +1,26 @@
+[project]
+name = "century-env"
+version = "0.1.0"
+description = "Jumanji RL environment for Century: Spice Road"
+requires-python = ">=3.10"
+dependencies = [
+    "jax>=0.4.20",
+    "jaxlib>=0.4.20",
+    "chex>=0.1.8",
+    "jumanji>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-xdist>=3.0.0",
+    "hypothesis>=6.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["century_env*"]
