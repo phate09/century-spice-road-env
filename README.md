@@ -21,6 +21,7 @@ pip install -e ".[dev]"
 
 ```python
 import jax
+import jax.numpy as jnp
 from century_env import CenturySpiceRoad
 
 # Create environment
@@ -52,8 +53,8 @@ The action is a 6-element multi-discrete array:
 
 ```
 CHOOSE_ACTION -> [Play|Acquire|Rest|Score]
-    Play -> EXECUTE_CARD (loop for conversion/exchange) -> done
-    Acquire -> PLACE_SPICE (loop) -> done
+    Play -> EXECUTE_CARD (loop for conversion/exchange) -> [DISCARD_OVERFLOW?] -> done
+    Acquire -> PLACE_SPICE (loop) -> [DISCARD_OVERFLOW?] -> done
     Rest -> done
     Score -> done
 ```
