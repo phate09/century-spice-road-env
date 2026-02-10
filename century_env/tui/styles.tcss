@@ -58,3 +58,21 @@ Screen {
 RichLog {
     height: 100%;
 }
+
+ClickableItem {
+    width: 100%;
+    height: auto;
+    padding: 0 1;
+}
+
+ClickableItem:hover {
+    background: $primary 15%;
+}
+
+ClickableItem.-disabled {
+    opacity: 0.5;
+}
+
+ClickableItem.-disabled:hover {
+    background: transparent;
+}

@@ -18,6 +18,7 @@ from century_env.constants import (
 )
 from century_env.tui.game import GameController
 from century_env.tui.widgets import (
+    ItemClicked,
     MarketPanel,
     ScoringPanel,
     PlayersPanel,
@@ -160,7 +161,9 @@ class SpiceRoadApp(App):
                     self._spice_callback = "execute_conv"
                     remaining = ast["remaining_upgrades"]
                     action_panel.show_pick_spice(
-                        legal, f"Upgrade spice ({remaining} left):"
+                        legal,
+                        f"Upgrade spice ({remaining} left):",
+                        show_done=True,
                     )
                     self.wizard = WizardState.PICK_SPICE
             elif ct == CARD_TYPE_EXCHANGE:
@@ -256,12 +259,36 @@ class SpiceRoadApp(App):
         elif self.wizard == WizardState.PICK_CONTINUE:
             self._handle_pick_continue(key)
 
-    def _handle_action_type(self, key: str) -> None:
+    # ------------------------------------------------------------------
+    # Click handling
+    # ------------------------------------------------------------------
+
+    def on_item_clicked(self, message: ItemClicked) -> None:
+        pt, idx = message.panel_type, message.index
+        if self.wizard == WizardState.PICK_ACTION_TYPE and pt == "action":
+            self._do_action_type(idx)
+        elif self.wizard == WizardState.PICK_CARD and pt == "hand":
+            self._do_pick_index(idx, "card")
+        elif self.wizard == WizardState.PICK_MARKET and pt == "market":
+            self._do_pick_index(idx, "market")
+        elif self.wizard == WizardState.PICK_SCORING and pt == "scoring":
+            self._do_pick_index(idx, "scoring")
+        elif self.wizard == WizardState.PICK_SPICE and pt == "spice":
+            self._do_pick_spice(idx)
+        elif self.wizard == WizardState.PICK_SPICE and pt == "done":
+            self._do_spice_done()
+        elif self.wizard == WizardState.PICK_CONTINUE and pt == "continue":
+            if idx == 0:
+                self._do_continue_again()
+            else:
+                self._do_continue_done()
+
+    # ------------------------------------------------------------------
+    # Shared action logic (used by both key and click handlers)
+    # ------------------------------------------------------------------
+
+    def _do_action_type(self, action_type: int) -> None:
         mask = self.gc.get_action_type_mask()
-        mapping = {"p": 0, "a": 1, "r": 2, "s": 3}
-        if key not in mapping:
-            return
-        action_type = mapping[key]
         if not mask[action_type]:
             self._log("[red]That action is not legal.[/red]")
             return
@@ -286,15 +313,7 @@ class SpiceRoadApp(App):
             action_panel.show_pick_scoring(legal, data["scoring"])
             self.wizard = WizardState.PICK_SCORING
 
-    def _handle_pick_index(self, key: str, context: str) -> None:
-        if key == "escape":
-            self._enter_human_phase()
-            return
-
-        idx = _key_to_index(key)
-        if idx is None:
-            return
-
+    def _do_pick_index(self, idx: int, context: str) -> None:
         if context == "card":
             legal = self.gc.get_legal_hand_indices()
             if idx not in legal:
@@ -318,68 +337,71 @@ class SpiceRoadApp(App):
         self._refresh_all()
         self._enter_human_phase()
 
-    def _handle_pick_spice(self, key: str) -> None:
-        if key == "escape":
-            # For mid-action spice picks (place/discard), escape = done if possible
-            if self._spice_callback in ("execute_conv",):
-                # Send DONE to finish conversion early
-                self.gc.step([0, 0, 0, 0, 0, 1])
-                self._flush_game_log()
-                self._refresh_all()
-                self._enter_human_phase()
-                return
-            # For place/discard, can't cancel
-            return
-        if key == "d" and self._spice_callback == "execute_conv":
-            # Done with conversion
-            self.gc.step([0, 0, 0, 0, 0, 1])
+    def _do_pick_spice(self, spice: int) -> None:
+        self.gc.step([0, 0, 0, 0, spice, 0])
+        self._flush_game_log()
+        self._refresh_all()
+        self._enter_human_phase()
+
+    def _do_spice_done(self) -> None:
+        self.gc.step([0, 0, 0, 0, 0, 1])
+        self._flush_game_log()
+        self._refresh_all()
+        self._enter_human_phase()
+
+    def _do_continue_again(self) -> None:
+        if self._spice_callback == "execute_exch":
+            self.gc.step([0, 0, 0, 0, 0, 0])
             self._flush_game_log()
             self._refresh_all()
             self._enter_human_phase()
-            return
 
+    def _do_continue_done(self) -> None:
+        self.gc.step([0, 0, 0, 0, 0, 1])
+        self._flush_game_log()
+        self._refresh_all()
+        self._enter_human_phase()
+
+    # ------------------------------------------------------------------
+    # Key handlers (delegate to shared logic)
+    # ------------------------------------------------------------------
+
+    def _handle_action_type(self, key: str) -> None:
+        mapping = {"p": 0, "a": 1, "r": 2, "s": 3}
+        if key not in mapping:
+            return
+        self._do_action_type(mapping[key])
+
+    def _handle_pick_index(self, key: str, context: str) -> None:
+        if key == "escape":
+            self._enter_human_phase()
+            return
+        idx = _key_to_index(key)
+        if idx is None:
+            return
+        self._do_pick_index(idx, context)
+
+    def _handle_pick_spice(self, key: str) -> None:
+        if key == "escape":
+            if self._spice_callback in ("execute_conv",):
+                self._do_spice_done()
+                return
+            return
+        if key == "d" and self._spice_callback == "execute_conv":
+            self._do_spice_done()
+            return
         mapping = {"y": 0, "r": 1, "g": 2, "b": 3}
         if key not in mapping:
             return
-        spice = mapping[key]
-
-        if self._spice_callback == "execute_conv":
-            # Upgrade this spice, continue (AGAIN=0)
-            self.gc.step([0, 0, 0, 0, spice, 0])
-            self._flush_game_log()
-            self._refresh_all()
-            self._enter_human_phase()
-        elif self._spice_callback == "place":
-            self.gc.step([0, 0, 0, 0, spice, 0])
-            self._flush_game_log()
-            self._refresh_all()
-            self._enter_human_phase()
-        elif self._spice_callback == "discard":
-            self.gc.step([0, 0, 0, 0, spice, 0])
-            self._flush_game_log()
-            self._refresh_all()
-            self._enter_human_phase()
+        self._do_pick_spice(mapping[key])
 
     def _handle_pick_continue(self, key: str) -> None:
         if key == "d":
-            # DONE
-            self.gc.step([0, 0, 0, 0, 0, 1])
-            self._flush_game_log()
-            self._refresh_all()
-            self._enter_human_phase()
+            self._do_continue_done()
         elif key == "a":
-            # AGAIN
-            if self._spice_callback == "execute_exch":
-                self.gc.step([0, 0, 0, 0, 0, 0])
-                self._flush_game_log()
-                self._refresh_all()
-                self._enter_human_phase()
+            self._do_continue_again()
         elif key == "escape":
-            # Treat as DONE
-            self.gc.step([0, 0, 0, 0, 0, 1])
-            self._flush_game_log()
-            self._refresh_all()
-            self._enter_human_phase()
+            self._do_continue_done()
 
     # ------------------------------------------------------------------
     # Actions (bound)
