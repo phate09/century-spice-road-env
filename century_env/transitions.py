@@ -220,15 +220,26 @@ def _execute_spice(state: State) -> State:
 
 def _execute_conversion(state: State, spice_idx: jnp.ndarray,
                         continue_flag: jnp.ndarray) -> State:
-    """Execute one upgrade of a conversion card."""
+    """Execute one upgrade of a conversion card.
+
+    Only applies the upgrade if remaining_upgrades > 0.
+    This prevents a spurious extra upgrade when the player picks DONE
+    after using all remaining upgrades via AGAIN.
+    """
     player = state.current_player
     caravan = state.caravans[player]
     remaining = state.remaining_upgrades
 
-    # Apply upgrade
-    new_caravan = apply_conversion(caravan, spice_idx)
+    # Only apply if upgrades remain (guards against DONE after exhausting upgrades)
+    should_apply = remaining > 0
+    new_caravan = lax.cond(
+        should_apply,
+        lambda c: apply_conversion(c, spice_idx),
+        lambda c: c,
+        caravan
+    )
     new_caravans = state.caravans.at[player].set(new_caravan)
-    new_remaining = remaining - 1
+    new_remaining = lax.cond(should_apply, lambda: remaining - 1, lambda: remaining)
 
     new_state = state.replace(
         caravans=new_caravans,
@@ -245,13 +256,25 @@ def _execute_conversion(state: State, spice_idx: jnp.ndarray,
 
 
 def _execute_exchange(state: State, continue_flag: jnp.ndarray) -> State:
-    """Execute one iteration of an exchange card."""
+    """Execute one iteration of an exchange card.
+
+    Only applies the exchange if the player can currently afford it.
+    This prevents a spurious extra exchange when the player picks DONE
+    after an AGAIN that exhausted their spices.
+    """
     player = state.current_player
     caravan = state.caravans[player]
     card = state.selected_card
 
-    # Apply exchange
-    new_caravan = apply_exchange(caravan, card)
+    # Only apply if affordable (guards against DONE after exhausting spices)
+    from century_env.cards import can_afford_exchange
+    affordable = can_afford_exchange(caravan, card)
+    new_caravan = lax.cond(
+        affordable,
+        lambda c: apply_exchange(c, card),
+        lambda c: c,
+        caravan
+    )
     new_caravans = state.caravans.at[player].set(new_caravan)
 
     new_state = state.replace(caravans=new_caravans)
