@@ -17,6 +17,12 @@ dev = [
     "pytest-xdist>=3.0.0",
     "hypothesis>=6.0.0",
 ]
+tui = [
+    "textual>=0.79.0",
+]
+
+[project.scripts]
+century-tui = "century_env.tui:main"
 
 [build-system]
 requires = ["setuptools>=61.0"]
