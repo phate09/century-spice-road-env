@@ -234,9 +234,10 @@ def render_action(action: jnp.ndarray, phase: Phase) -> str:
             return f"{name} card at index {scoring_idx}"
 
     elif phase == Phase.EXECUTE_CARD:
+        if continue_flag == 1:
+            return "Done (finish card)"
         spice = SPICE_CHARS[spice_type]
-        cont = "AGAIN" if continue_flag == 0 else "DONE"
-        return f"Upgrade {spice}, then {cont}"
+        return f"Upgrade {spice}"
 
     elif phase == Phase.PLACE_SPICE:
         spice = SPICE_CHARS[spice_type]

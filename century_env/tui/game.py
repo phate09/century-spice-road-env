@@ -213,6 +213,7 @@ class GameController:
             action_state["card_type"] = ct
             action_state["card_text"] = _render_trader_card_inline(card)
             action_state["remaining_upgrades"] = int(s.remaining_upgrades)
+            action_state["total_upgrades"] = int(get_card_upgrades(s.selected_card))
             if ct == CARD_TYPE_CONVERSION:
                 caravan = s.caravans[int(s.current_player)]
                 upgradeable = []

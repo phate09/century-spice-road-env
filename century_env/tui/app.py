@@ -64,6 +64,7 @@ class SpiceRoadApp(App):
         self.wizard = WizardState.IDLE
         # Context for multi-step wizard
         self._spice_callback: str = ""  # "execute_conv" | "place" | "discard"
+        self._exchange_first_done: bool = False
 
     # ------------------------------------------------------------------
     # Compose
@@ -135,6 +136,7 @@ class SpiceRoadApp(App):
         action_panel = self.query_one("#action-panel", ActionPanel)
 
         if phase == Phase.CHOOSE_ACTION:
+            self._exchange_first_done = False
             mask = self.gc.get_action_type_mask()
             action_panel.show_choose_action(mask)
             self.wizard = WizardState.PICK_ACTION_TYPE
@@ -160,17 +162,25 @@ class SpiceRoadApp(App):
                 else:
                     self._spice_callback = "execute_conv"
                     remaining = ast["remaining_upgrades"]
+                    total = ast["total_upgrades"]
                     action_panel.show_pick_spice(
                         legal,
                         f"Upgrade spice ({remaining} left):",
-                        show_done=True,
+                        show_done=remaining < total,
                     )
                     self.wizard = WizardState.PICK_SPICE
             elif ct == CARD_TYPE_EXCHANGE:
-                can_again = ast.get("can_again", False)
-                action_panel.show_pick_continue(can_again)
-                self.wizard = WizardState.PICK_CONTINUE
-                self._spice_callback = "execute_exch"
+                if not self._exchange_first_done:
+                    self._exchange_first_done = True
+                    self.gc.step([0, 0, 0, 0, 0, 0])
+                    self._flush_game_log()
+                    self._refresh_all()
+                    self._enter_human_phase()
+                else:
+                    can_again = ast.get("can_again", False)
+                    action_panel.show_pick_continue(can_again)
+                    self.wizard = WizardState.PICK_CONTINUE
+                    self._spice_callback = "execute_exch"
 
         elif phase == Phase.PLACE_SPICE:
             data = self.gc.get_display_data()
