@@ -42,6 +42,15 @@ Screen {
     overflow-y: auto;
 }
 
+#deck-panel {
+    column-span: 3;
+    display: none;
+    border: solid $warning;
+    padding: 0 1;
+    overflow-y: auto;
+    max-height: 20;
+}
+
 #action-panel {
     border: solid $success;
     padding: 0 1;

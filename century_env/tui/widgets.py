@@ -159,6 +159,36 @@ class HandPanel(Container):
         self.mount(*children)
 
 
+class DeckPanel(Container):
+    """Displays full contents of trader and scoring decks."""
+
+    def update_data(self, deck_data: dict) -> None:
+        self.remove_children()
+        children: list[Static] = []
+
+        t = Text()
+        t.append(f"TRADER DECK  ({deck_data['trader_deck_size']} cards, top → bottom)", style="bold underline")
+        children.append(Static(t))
+        for entry in deck_data["trader_deck"]:
+            t = Text()
+            t.append(f"  {entry['idx']:>3}  ", style="dim")
+            t.append(entry["card"])
+            children.append(Static(t))
+
+        children.append(Static(Text()))
+
+        t = Text()
+        t.append(f"SCORING DECK  ({deck_data['scoring_deck_size']} cards, top → bottom)", style="bold underline")
+        children.append(Static(t))
+        for entry in deck_data["scoring_deck"]:
+            t = Text()
+            t.append(f"  {entry['idx']:>3}  ", style="dim")
+            t.append(entry["card"])
+            children.append(Static(t))
+
+        self.mount(*children)
+
+
 class ActionPanel(Container):
     """Displays available actions / wizard prompts."""
 

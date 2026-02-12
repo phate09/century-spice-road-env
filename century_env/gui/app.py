@@ -101,6 +101,10 @@ class SpiceRoadGUI:
         # Clickable regions rebuilt every frame: (Rect, action_kind, index)
         self._clickables: list[tuple[pygame.Rect, str, int]] = []
 
+        # Deck viewer overlay
+        self._show_deck: bool = False
+        self._deck_scroll: int = 0
+
         # Game log
         self._log_lines: list[str] = []
         self._log_scroll: int = 0
@@ -126,12 +130,20 @@ class SpiceRoadGUI:
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_q:
                         running = False
+                    elif event.key == pygame.K_i:
+                        self._show_deck = not self._show_deck
+                        self._deck_scroll = 0
                     elif event.key == pygame.K_n:
                         self._new_game()
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    self._handle_click(event.pos)
+                    if self._show_deck:
+                        self._show_deck = False
+                    else:
+                        self._handle_click(event.pos)
                 elif event.type == pygame.MOUSEWHEEL:
-                    if LOG_RECT.collidepoint(pygame.mouse.get_pos()):
+                    if self._show_deck:
+                        self._deck_scroll = max(0, self._deck_scroll - event.y * 3)
+                    elif LOG_RECT.collidepoint(pygame.mouse.get_pos()):
                         self._log_scroll = max(0, self._log_scroll - event.y * 3)
                 elif event.type == AI_STEP_EVENT:
                     self._flush_game_log()
@@ -375,6 +387,9 @@ class SpiceRoadGUI:
         self._draw_caravan_info(data)
         self._draw_action_panel()
         self._draw_log()
+
+        if self._show_deck:
+            self._draw_deck_overlay()
 
         pygame.display.flip()
 
@@ -620,6 +635,53 @@ class SpiceRoadGUI:
             hov = nr.collidepoint(mouse)
             draw_button(self.screen, self._font_sm, nr, "New Game", True, hov)
             self._clickables.append((nr, "new_game", 0))
+
+    # -- deck overlay --
+
+    def _draw_deck_overlay(self) -> None:
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 200))
+        self.screen.blit(overlay, (0, 0))
+
+        margin = 40
+        panel = pygame.Rect(margin, margin, WIDTH - 2 * margin, HEIGHT - 2 * margin)
+        pygame.draw.rect(self.screen, (30, 30, 40), panel, border_radius=8)
+        pygame.draw.rect(self.screen, HIGHLIGHT_BORDER, panel, width=2, border_radius=8)
+
+        deck_data = self.gc.get_deck_data()
+        line_h = 18
+        lines: list[tuple[str, tuple[int, int, int]]] = []
+
+        lines.append((f"TRADER DECK  ({deck_data['trader_deck_size']} cards, top to bottom)", HIGHLIGHT_BORDER))
+        for entry in deck_data["trader_deck"]:
+            card = entry["card"].replace("\u2192", "->")
+            lines.append((f"  {entry['idx']:>3}  {card}", TEXT_COLOR))
+        lines.append(("", TEXT_COLOR))
+        lines.append((f"SCORING DECK  ({deck_data['scoring_deck_size']} cards, top to bottom)", HIGHLIGHT_BORDER))
+        for entry in deck_data["scoring_deck"]:
+            card = entry["card"].replace("\u2192", "->")
+            lines.append((f"  {entry['idx']:>3}  {card}", TEXT_COLOR))
+
+        clip = pygame.Rect(panel.x + 10, panel.y + 10, panel.width - 20, panel.height - 30)
+        self.screen.set_clip(clip)
+
+        visible = clip.height // line_h
+        max_scroll = max(0, len(lines) - visible)
+        if self._deck_scroll > max_scroll:
+            self._deck_scroll = max_scroll
+        start = self._deck_scroll
+
+        y = clip.y
+        for text, color in lines[start : start + visible]:
+            if text:
+                surf = self._font_sm.render(text, True, color)
+                self.screen.blit(surf, (clip.x, y))
+            y += line_h
+
+        self.screen.set_clip(None)
+
+        hint = self._font_xs.render("Press I or click to close  |  Scroll with mousewheel", True, TEXT_DIM)
+        self.screen.blit(hint, (panel.centerx - hint.get_width() // 2, panel.bottom - 20))
 
     # -- game log --
 

@@ -256,6 +256,29 @@ class GameController:
             "game_triggered": bool(s.game_triggered),
         }
 
+    def get_deck_data(self) -> dict[str, Any]:
+        """Return full contents of both decks (top-to-bottom)."""
+        s = self.state
+        td_size = int(s.trader_deck_size)
+        sd_size = int(s.scoring_deck_size)
+
+        trader_deck = []
+        for i in range(td_size):
+            card = s.trader_deck[i]
+            trader_deck.append({"idx": i, "card": _render_trader_card_inline(card)})
+
+        scoring_deck = []
+        for i in range(sd_size):
+            card = s.scoring_deck[i]
+            scoring_deck.append({"idx": i, "card": _render_scoring_card_inline(card)})
+
+        return {
+            "trader_deck": trader_deck,
+            "trader_deck_size": td_size,
+            "scoring_deck": scoring_deck,
+            "scoring_deck_size": sd_size,
+        }
+
     def get_final_scores(self) -> list[int]:
         scores = compute_final_scores(self.state)
         num_p = int(self.state.num_players)

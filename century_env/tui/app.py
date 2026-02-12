@@ -23,6 +23,7 @@ from century_env.tui.widgets import (
     ScoringPanel,
     PlayersPanel,
     HandPanel,
+    DeckPanel,
     ActionPanel,
 )
 
@@ -76,6 +77,7 @@ class SpiceRoadApp(App):
         yield ScoringPanel(id="scoring-panel")
         yield PlayersPanel(id="players-panel")
         yield HandPanel(id="hand-panel")
+        yield DeckPanel(id="deck-panel")
         yield ActionPanel(id="action-panel")
         yield RichLog(highlight=True, markup=True, id="game-log")
 
@@ -102,6 +104,9 @@ class SpiceRoadApp(App):
         self.query_one("#hand-panel", HandPanel).update_data(
             data["hand"], data["played"], data["human_caravan"]
         )
+        deck_panel = self.query_one("#deck-panel", DeckPanel)
+        if deck_panel.display:
+            deck_panel.update_data(self.gc.get_deck_data())
         phase = data["phase"]
         player = data["current_player"]
         triggered = " [TRIGGERED]" if data["game_triggered"] else ""
@@ -247,6 +252,12 @@ class SpiceRoadApp(App):
         # Global keys
         if key == "q":
             self.exit()
+            return
+        if key == "i":
+            deck_panel = self.query_one("#deck-panel", DeckPanel)
+            deck_panel.display = not deck_panel.display
+            if deck_panel.display:
+                deck_panel.update_data(self.gc.get_deck_data())
             return
         if key == "n":
             self.gc.new_game()
