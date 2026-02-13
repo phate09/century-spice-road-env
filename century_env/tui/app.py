@@ -57,7 +57,7 @@ class SpiceRoadApp(App):
         self,
         num_players: int = 4,
         seed: int = 42,
-        ai_delay: float = 0.3,
+        ai_delay: float = 0.0,
     ) -> None:
         super().__init__()
         self.gc = GameController(num_players=num_players, seed=seed)

@@ -84,7 +84,7 @@ class SpiceRoadGUI:
         self,
         num_players: int = 4,
         seed: int = 42,
-        ai_delay: float = 0.3,
+        ai_delay: float = 0.0,
     ) -> None:
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
