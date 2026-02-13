@@ -3,10 +3,10 @@
 Launch with: century-tui  OR  python -m century_env.tui
 """
 
-from century_env.tui.app import SpiceRoadApp
-
 
 def main() -> None:
+    from century_env.tui.app import SpiceRoadApp
+
     app = SpiceRoadApp()
     app.run()
 
