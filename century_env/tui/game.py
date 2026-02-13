@@ -31,6 +31,7 @@ from century_env.cards import (
 )
 from century_env.mechanics import caravan_total, can_apply_conversion
 from century_env.render import (
+    SPICE_CHARS,
     _render_trader_card_inline,
     _render_scoring_card_inline,
     render_caravan as _render_caravan_jax,
@@ -63,6 +64,8 @@ class GameController:
         self.log: list[str] = []
         self.history: list[str] = []
         self._checkpoint: tuple | None = None
+        self._history_caravan_before: list[int] | None = None
+        self._history_player: int = 0
 
     # ------------------------------------------------------------------
     # Checkpoint (undo support)
@@ -86,6 +89,7 @@ class GameController:
         self.state, self.timestep, hist_len = self._checkpoint
         self.history = self.history[:hist_len]
         self._checkpoint = None
+        self._history_caravan_before = None
         self.game_over = False
         self.log.append("Undid action.")
         return True
@@ -102,6 +106,7 @@ class GameController:
         self.game_over = False
         self.log = ["New game started."]
         self.history = []
+        self._history_caravan_before = None
 
     # ------------------------------------------------------------------
     # Actions
@@ -116,9 +121,19 @@ class GameController:
         label = "You" if player == 0 else f"Player {player}"
         self.log.append(f"{label}: {description}")
         if phase == Phase.CHOOSE_ACTION:
-            self.history.append(f"{label}: {description}")
+            self.history.append(self._build_history_entry(action))
+            self._history_caravan_before = np.asarray(
+                self.state.caravans[player]
+            ).tolist()
+            self._history_player = player
         self.state, self.timestep = self.env.step(self.state, action_jax)
         self.game_over = bool(self.timestep.last())
+        # Finalize history entry when action completes
+        new_phase = Phase(int(self.state.phase))
+        if self._history_caravan_before is not None and (
+            new_phase == Phase.CHOOSE_ACTION or self.game_over
+        ):
+            self._finalize_history_entry()
 
     def step_ai(self) -> None:
         """Play one AI step for the current player."""
@@ -126,6 +141,58 @@ class GameController:
         self._rng, key = jax.random.split(self._rng)
         action = self.agent.select_action_from_mask(key, masks)
         self.step(_j2p(action))
+
+    # ------------------------------------------------------------------
+    # History helpers
+    # ------------------------------------------------------------------
+
+    def _build_history_entry(self, action: list[int]) -> str:
+        """Build a rich history entry for a CHOOSE_ACTION step."""
+        s = self.state
+        player = int(s.current_player)
+        action_type = action[0]
+        card_idx = action[1]
+        market_pos = action[2]
+        scoring_idx = action[3]
+        label = "You" if player == 0 else f"Player {player}"
+
+        if action_type == 0:  # Play
+            card = s.hands[player, card_idx]
+            card_str = _render_trader_card_inline(card)
+            return f"{label}: PLAY {card_str}"
+        elif action_type == 1:  # Acquire
+            card = s.market_cards[market_pos]
+            card_str = _render_trader_card_inline(card)
+            cost_part = f" (cost: {market_pos})" if market_pos > 0 else ""
+            return f"{label}: ACQUIRE {card_str}{cost_part}"
+        elif action_type == 2:  # Rest
+            played_size = int(s.played_sizes[player])
+            return f"{label}: REST ({played_size} cards)"
+        elif action_type == 3:  # Score
+            card = s.scoring_row[scoring_idx]
+            card_str = _render_scoring_card_inline(card)
+            return f"{label}: SCORE {card_str}"
+        return f"{label}: ???"
+
+    def _finalize_history_entry(self) -> None:
+        """Append net caravan change to the last history entry."""
+        after = np.asarray(self.state.caravans[self._history_player]).tolist()
+        before = self._history_caravan_before
+        self._history_caravan_before = None
+        diff = [after[i] - before[i] for i in range(len(before))]
+        if all(d == 0 for d in diff):
+            return
+        gains = "".join(SPICE_CHARS[i] * d for i, d in enumerate(diff) if d > 0)
+        losses = "".join(
+            SPICE_CHARS[i] * (-d) for i, d in enumerate(diff) if d < 0
+        )
+        parts = []
+        if gains:
+            parts.append(f"+{gains}")
+        if losses:
+            parts.append(f"-{losses}")
+        if parts:
+            self.history[-1] += f" ({' '.join(parts)})"
 
     # ------------------------------------------------------------------
     # Query helpers
