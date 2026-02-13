@@ -141,6 +141,7 @@ class SpiceRoadApp(App):
         action_panel = self.query_one("#action-panel", ActionPanel)
 
         if phase == Phase.CHOOSE_ACTION:
+            self.gc.save_checkpoint()
             self._exchange_first_done = False
             mask = self.gc.get_action_type_mask()
             action_panel.show_choose_action(mask)
@@ -215,6 +216,7 @@ class SpiceRoadApp(App):
             self._log(f"[red]Unexpected phase: {phase.name}[/red]")
 
     def _show_game_over(self) -> None:
+        self.gc.clear_checkpoint()
         self.wizard = WizardState.GAME_OVER
         scores = self.gc.get_final_scores()
         self._flush_game_log()
@@ -229,6 +231,7 @@ class SpiceRoadApp(App):
     # ------------------------------------------------------------------
 
     def _run_ai(self) -> None:
+        self.gc.clear_checkpoint()
         self.wizard = WizardState.AI_THINKING
         self.query_one("#action-panel", ActionPanel).show_waiting()
         self.run_worker(self._ai_loop, exclusive=True, thread=True)
@@ -241,6 +244,21 @@ class SpiceRoadApp(App):
             self.call_from_thread(self._refresh_all)
             time.sleep(self.ai_delay)
         self.call_from_thread(self._enter_human_phase)
+
+    # ------------------------------------------------------------------
+    # Undo
+    # ------------------------------------------------------------------
+
+    def _can_undo_now(self) -> bool:
+        return self.wizard in (WizardState.PICK_SPICE, WizardState.PICK_CONTINUE) and self.gc.can_undo
+
+    def _do_undo(self) -> None:
+        self.gc.undo()
+        self._spice_callback = ""
+        self._exchange_first_done = False
+        self._flush_game_log()
+        self._refresh_all()
+        self._enter_human_phase()
 
     # ------------------------------------------------------------------
     # Key handling
@@ -265,6 +283,9 @@ class SpiceRoadApp(App):
             self._flush_game_log()
             self._refresh_all()
             self._enter_human_phase()
+            return
+        if key == "u" and self._can_undo_now():
+            self._do_undo()
             return
 
         if self.wizard == WizardState.PICK_ACTION_TYPE:
@@ -303,6 +324,8 @@ class SpiceRoadApp(App):
                 self._do_continue_again()
             else:
                 self._do_continue_done()
+        elif pt == "undo" and self._can_undo_now():
+            self._do_undo()
 
     # ------------------------------------------------------------------
     # Shared action logic (used by both key and click handlers)
@@ -432,6 +455,7 @@ class SpiceRoadApp(App):
         self.exit()
 
     def action_new_game(self) -> None:
+        self.gc.clear_checkpoint()
         self.gc.new_game()
         self.query_one("#game-log", RichLog).clear()
         self._flush_game_log()

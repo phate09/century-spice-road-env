@@ -289,7 +289,9 @@ class ActionPanel(Container):
             children.append(
                 ClickableItem(Text("  [D]one", style="bold green"), "done", 0)
             )
-        children.append(Static(Text("  [Esc] Cancel", style="dim")))
+        children.append(
+            ClickableItem(Text("  [U]ndo", style="dim cyan"), "undo", 0)
+        )
         self._rebuild(*children)
 
     def show_pick_continue(self, can_again: bool) -> None:
@@ -303,6 +305,9 @@ class ActionPanel(Container):
         children.append(ClickableItem(t, "continue", 0, disabled=not can_again))
         children.append(
             ClickableItem(Text("  [D]one", style="bold green"), "continue", 1)
+        )
+        children.append(
+            ClickableItem(Text("  [U]ndo", style="dim cyan"), "undo", 0)
         )
         self._rebuild(*children)
 

@@ -61,6 +61,32 @@ class GameController:
         self.timestep = None
         self.game_over = False
         self.log: list[str] = []
+        self._checkpoint: tuple | None = None
+
+    # ------------------------------------------------------------------
+    # Checkpoint (undo support)
+    # ------------------------------------------------------------------
+
+    def save_checkpoint(self) -> None:
+        """Snapshot current state/timestep so the player can undo."""
+        self._checkpoint = (self.state, self.timestep)
+
+    def clear_checkpoint(self) -> None:
+        self._checkpoint = None
+
+    @property
+    def can_undo(self) -> bool:
+        return self._checkpoint is not None
+
+    def undo(self) -> bool:
+        """Restore the checkpoint. Returns True on success."""
+        if self._checkpoint is None:
+            return False
+        self.state, self.timestep = self._checkpoint
+        self._checkpoint = None
+        self.game_over = False
+        self.log.append("Undid action.")
+        return True
 
     # ------------------------------------------------------------------
     # Lifecycle
