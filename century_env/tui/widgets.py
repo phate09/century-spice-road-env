@@ -189,6 +189,26 @@ class DeckPanel(Container):
         self.mount(*children)
 
 
+class HistoryPanel(Container):
+    """Displays turn-level history of player actions."""
+
+    def update_data(self, history: list[str]) -> None:
+        self.remove_children()
+        children: list[Static] = []
+        t = Text()
+        t.append(f"TURN HISTORY  ({len(history)} entries)", style="bold underline")
+        children.append(Static(t))
+        if not history:
+            children.append(Static(Text("  No turns yet.", style="dim")))
+        else:
+            for i, entry in enumerate(history, 1):
+                t = Text()
+                t.append(f"  {i:>3}. ", style="dim")
+                t.append(entry)
+                children.append(Static(t))
+        self.mount(*children)
+
+
 class ActionPanel(Container):
     """Displays available actions / wizard prompts."""
 

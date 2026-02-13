@@ -61,6 +61,7 @@ class GameController:
         self.timestep = None
         self.game_over = False
         self.log: list[str] = []
+        self.history: list[str] = []
         self._checkpoint: tuple | None = None
 
     # ------------------------------------------------------------------
@@ -69,7 +70,7 @@ class GameController:
 
     def save_checkpoint(self) -> None:
         """Snapshot current state/timestep so the player can undo."""
-        self._checkpoint = (self.state, self.timestep)
+        self._checkpoint = (self.state, self.timestep, len(self.history))
 
     def clear_checkpoint(self) -> None:
         self._checkpoint = None
@@ -82,7 +83,8 @@ class GameController:
         """Restore the checkpoint. Returns True on success."""
         if self._checkpoint is None:
             return False
-        self.state, self.timestep = self._checkpoint
+        self.state, self.timestep, hist_len = self._checkpoint
+        self.history = self.history[:hist_len]
         self._checkpoint = None
         self.game_over = False
         self.log.append("Undid action.")
@@ -99,6 +101,7 @@ class GameController:
         self.state, self.timestep = self.env.reset(reset_key)
         self.game_over = False
         self.log = ["New game started."]
+        self.history = []
 
     # ------------------------------------------------------------------
     # Actions
@@ -112,6 +115,8 @@ class GameController:
         player = int(self.state.current_player)
         label = "You" if player == 0 else f"Player {player}"
         self.log.append(f"{label}: {description}")
+        if phase == Phase.CHOOSE_ACTION:
+            self.history.append(f"{label}: {description}")
         self.state, self.timestep = self.env.step(self.state, action_jax)
         self.game_over = bool(self.timestep.last())
 
@@ -304,6 +309,9 @@ class GameController:
             "scoring_deck": scoring_deck,
             "scoring_deck_size": sd_size,
         }
+
+    def get_history(self) -> list[str]:
+        return list(self.history)
 
     def get_final_scores(self) -> list[int]:
         scores = compute_final_scores(self.state)

@@ -24,6 +24,7 @@ from century_env.tui.widgets import (
     PlayersPanel,
     HandPanel,
     DeckPanel,
+    HistoryPanel,
     ActionPanel,
 )
 
@@ -78,6 +79,7 @@ class SpiceRoadApp(App):
         yield PlayersPanel(id="players-panel")
         yield HandPanel(id="hand-panel")
         yield DeckPanel(id="deck-panel")
+        yield HistoryPanel(id="history-panel")
         yield ActionPanel(id="action-panel")
         yield RichLog(highlight=True, markup=True, id="game-log")
 
@@ -107,6 +109,9 @@ class SpiceRoadApp(App):
         deck_panel = self.query_one("#deck-panel", DeckPanel)
         if deck_panel.display:
             deck_panel.update_data(self.gc.get_deck_data())
+        history_panel = self.query_one("#history-panel", HistoryPanel)
+        if history_panel.display:
+            history_panel.update_data(self.gc.get_history())
         phase = data["phase"]
         player = data["current_player"]
         triggered = " [TRIGGERED]" if data["game_triggered"] else ""
@@ -275,7 +280,15 @@ class SpiceRoadApp(App):
             deck_panel = self.query_one("#deck-panel", DeckPanel)
             deck_panel.display = not deck_panel.display
             if deck_panel.display:
+                self.query_one("#history-panel", HistoryPanel).display = False
                 deck_panel.update_data(self.gc.get_deck_data())
+            return
+        if key == "h":
+            history_panel = self.query_one("#history-panel", HistoryPanel)
+            history_panel.display = not history_panel.display
+            if history_panel.display:
+                self.query_one("#deck-panel", DeckPanel).display = False
+                history_panel.update_data(self.gc.get_history())
             return
         if key == "n":
             self.gc.new_game()
