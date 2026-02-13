@@ -9,7 +9,7 @@ import jax.numpy as jnp
 from jax import lax
 
 from century_env.types import State
-from century_env.constants import MAX_PLAYERS
+from century_env.constants import MAX_PLAYERS, SPICE_VALUES
 
 
 def compute_step_reward(state: State, next_state: State,
@@ -153,3 +153,48 @@ def compute_winner_rewards(state: State) -> jnp.ndarray:
     rewards = jnp.where(active_mask, rewards, 0.0)
 
     return rewards.astype(jnp.float32)
+
+
+def compute_potential(state: State, player: jnp.ndarray,
+                      spice_coeff: float, hand_coeff: float) -> jnp.ndarray:
+    """Compute potential phi(s) for PBRS.
+
+    phi(s) = spice_coeff * dot(caravan, SPICE_VALUES) + hand_coeff * (hand_size - 2)
+
+    Args:
+        state: Current game state
+        player: Player index
+        spice_coeff: Weight for caravan value
+        hand_coeff: Weight for hand size bonus
+
+    Returns:
+        float32 scalar potential
+    """
+    caravan = state.caravans[player]
+    caravan_value = jnp.sum(caravan * SPICE_VALUES).astype(jnp.float32)
+    hand_bonus = (state.hand_sizes[player] - 2).astype(jnp.float32)
+    return spice_coeff * caravan_value + hand_coeff * hand_bonus
+
+
+def compute_shaping_bonus(state: State, next_state: State,
+                          player: jnp.ndarray, is_done: jnp.ndarray,
+                          spice_coeff: float, hand_coeff: float) -> jnp.ndarray:
+    """Compute PBRS shaping reward F(s,s') = phi(s') - phi(s).
+
+    At terminal states phi(s') = 0 to preserve optimality guarantees.
+
+    Args:
+        state: State before the step
+        next_state: State after the step
+        player: Player index
+        is_done: Whether the game is over
+        spice_coeff: Weight for caravan value
+        hand_coeff: Weight for hand size bonus
+
+    Returns:
+        float32 scalar shaping bonus
+    """
+    phi_old = compute_potential(state, player, spice_coeff, hand_coeff)
+    phi_new = compute_potential(next_state, player, spice_coeff, hand_coeff)
+    phi_new = jnp.where(is_done, jnp.float32(0.0), phi_new)
+    return phi_new - phi_old

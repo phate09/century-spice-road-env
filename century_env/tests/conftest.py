@@ -22,6 +22,8 @@ from century_env.rewards import (
     compute_final_reward,
     compute_final_scores,
     compute_winner_rewards,
+    compute_potential,
+    compute_shaping_bonus,
 )
 from century_env.termination import (
     check_game_triggered,
@@ -48,6 +50,8 @@ jit_compute_step_reward = jax.jit(compute_step_reward)
 jit_compute_final_reward = jax.jit(compute_final_reward)
 jit_compute_final_scores = jax.jit(compute_final_scores)
 jit_compute_winner_rewards = jax.jit(compute_winner_rewards)
+jit_compute_potential = jax.jit(compute_potential, static_argnums=(2, 3))
+jit_compute_shaping_bonus = jax.jit(compute_shaping_bonus, static_argnums=(4, 5))
 
 # Termination
 jit_check_game_triggered = jax.jit(check_game_triggered)
@@ -81,6 +85,19 @@ def env_2p():
 def env_5p():
     """5-player environment."""
     return CenturySpiceRoad(num_players=5)
+
+
+@pytest.fixture(scope="session")
+def env_4p_shaped():
+    """4-player environment with PBRS reward shaping."""
+    return CenturySpiceRoad(num_players=4, reward_mode="shaped")
+
+
+@pytest.fixture(scope="session")
+def initial_state_4p_shaped(env_4p_shaped, prng_key):
+    """Initial state for 4-player shaped game."""
+    state, _ = env_4p_shaped.reset(prng_key)
+    return state
 
 
 @pytest.fixture(scope="session")
@@ -170,6 +187,10 @@ def warmup_jit_cache(env_4p, prng_key, jit_reset_4p, jit_step_4p, vmap_reset_4p,
     _ = jit_compute_final_reward(state, jnp.int32(0))
     _ = jit_compute_final_scores(state)
     _ = jit_compute_winner_rewards(state)
+
+    # Warm up PBRS
+    _ = jit_compute_potential(state, jnp.int32(0), 0.1, 0.5)
+    _ = jit_compute_shaping_bonus(state, state, jnp.int32(0), jnp.bool_(False), 0.1, 0.5)
 
     # Warm up termination
     _ = jit_check_game_triggered(state)

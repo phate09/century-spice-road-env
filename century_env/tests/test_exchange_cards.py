@@ -1,6 +1,7 @@
 """Tests for exchange card execution (YYYY->GB, G->RR, etc).
 
-Exercises single and multiple uses through the full env.step() interface.
+Exchange semantics: playing the card auto-applies the first exchange.
+AGAIN applies it again, DONE exits without applying.
 """
 
 import jax
@@ -60,55 +61,53 @@ class TestYYYYtoGB:
         """Play YYYY->GB once with DONE: 4Y -> 0Y 1G 1B."""
         state = _setup_exchange_state(env, CARD_YYYY_GB, [4, 0, 0, 0])
 
-        # Play card 0
+        # Play card 0 — auto-applies first exchange
         state, ts = env.step(state, _make_action(action_type=0, card_idx=0))
         assert int(state.phase) == Phase.EXECUTE_CARD
-
-        # DONE (apply once and finish)
-        state, ts = env.step(state, _make_action(continue_flag=1))
-
         caravan = [int(state.caravans[0][i]) for i in range(4)]
-        assert caravan == [0, 0, 1, 1], f"Expected [0,0,1,1], got {caravan}"
+        assert caravan == [0, 0, 1, 1], f"After play: expected [0,0,1,1], got {caravan}"
+
+        # DONE (just exit)
+        state, ts = env.step(state, _make_action(continue_flag=1))
+        caravan = [int(state.caravans[0][i]) for i in range(4)]
+        assert caravan == [0, 0, 1, 1], f"After DONE: expected [0,0,1,1], got {caravan}"
         assert int(state.phase) == Phase.CHOOSE_ACTION
 
     def test_again_then_done(self, env):
         """Play YYYY->GB with AGAIN then DONE: 8Y -> 4Y,1G,1B -> 0Y,2G,2B."""
         state = _setup_exchange_state(env, CARD_YYYY_GB, [8, 0, 0, 0])
 
-        # Play card 0
+        # Play card 0 — auto-applies first exchange
         state, ts = env.step(state, _make_action(action_type=0, card_idx=0))
         assert int(state.phase) == Phase.EXECUTE_CARD
+        caravan = [int(state.caravans[0][i]) for i in range(4)]
+        assert caravan == [4, 0, 1, 1], f"After play: expected [4,0,1,1], got {caravan}"
 
-        # AGAIN (first exchange: 8Y -> 4Y 1G 1B)
+        # AGAIN (second exchange: 4Y,1G,1B -> 0Y,2G,2B)
         state, ts = env.step(state, _make_action(continue_flag=0))
         caravan = [int(state.caravans[0][i]) for i in range(4)]
-        assert caravan == [4, 0, 1, 1], f"After AGAIN: expected [4,0,1,1], got {caravan}"
+        assert caravan == [0, 0, 2, 2], f"After AGAIN: expected [0,0,2,2], got {caravan}"
         assert int(state.phase) == Phase.EXECUTE_CARD
 
-        # DONE (second exchange: 4Y,1G,1B -> 0Y,2G,2B)
+        # DONE (just exit)
         state, ts = env.step(state, _make_action(continue_flag=1))
         caravan = [int(state.caravans[0][i]) for i in range(4)]
         assert caravan == [0, 0, 2, 2], f"After DONE: expected [0,0,2,2], got {caravan}"
 
     def test_cannot_afford_second_use(self, env):
-        """Play YYYY->GB with exactly 4Y, pick AGAIN (which applies once),
-        then forced DONE should NOT apply a second exchange."""
+        """Play YYYY->GB with exactly 4Y: auto-applies once, then DONE exits."""
         state = _setup_exchange_state(env, CARD_YYYY_GB, [4, 0, 0, 0])
 
-        # Play card 0
+        # Play card 0 — auto-applies: 4Y -> 0Y 1G 1B
         state, ts = env.step(state, _make_action(action_type=0, card_idx=0))
-
-        # AGAIN (first exchange: 4Y -> 0Y 1G 1B)
-        state, ts = env.step(state, _make_action(continue_flag=0))
         caravan = [int(state.caravans[0][i]) for i in range(4)]
-        assert caravan == [0, 0, 1, 1], f"After AGAIN: expected [0,0,1,1], got {caravan}"
+        assert caravan == [0, 0, 1, 1], f"After play: expected [0,0,1,1], got {caravan}"
 
-        # DONE — must NOT apply a second exchange (can't afford it)
+        # DONE — can't afford another, just exit
         state, ts = env.step(state, _make_action(continue_flag=1))
         caravan = [int(state.caravans[0][i]) for i in range(4)]
-        # BUG: without fix this would be [-4, 0, 2, 2]
         assert caravan == [0, 0, 1, 1], (
-            f"DONE should not apply exchange when unaffordable. "
+            f"DONE should not apply exchange. "
             f"Expected [0,0,1,1], got {caravan}"
         )
         assert all(c >= 0 for c in caravan), f"Negative spices! {caravan}"
@@ -121,43 +120,49 @@ class TestGtoRR:
         """Play G->RR once with DONE: 1G -> 2R."""
         state = _setup_exchange_state(env, CARD_G_RR, [0, 0, 1, 0])
 
+        # Play card 0 — auto-applies first exchange
         state, ts = env.step(state, _make_action(action_type=0, card_idx=0))
         assert int(state.phase) == Phase.EXECUTE_CARD
+        caravan = [int(state.caravans[0][i]) for i in range(4)]
+        assert caravan == [0, 2, 0, 0], f"After play: expected [0,2,0,0], got {caravan}"
 
+        # DONE (just exit)
         state, ts = env.step(state, _make_action(continue_flag=1))
         caravan = [int(state.caravans[0][i]) for i in range(4)]
-        assert caravan == [0, 2, 0, 0], f"Expected [0,2,0,0], got {caravan}"
+        assert caravan == [0, 2, 0, 0], f"After DONE: expected [0,2,0,0], got {caravan}"
 
     def test_triple_use(self, env):
         """Play G->RR three times: 3G -> 2G,2R -> 1G,4R -> 6R."""
         state = _setup_exchange_state(env, CARD_G_RR, [0, 0, 3, 0])
 
+        # Play card 0 — auto-applies first exchange
         state, ts = env.step(state, _make_action(action_type=0, card_idx=0))
-
-        # AGAIN x2
-        state, ts = env.step(state, _make_action(continue_flag=0))
         caravan = [int(state.caravans[0][i]) for i in range(4)]
-        assert caravan == [0, 2, 2, 0], f"After 1st: expected [0,2,2,0], got {caravan}"
+        assert caravan == [0, 2, 2, 0], f"After play: expected [0,2,2,0], got {caravan}"
 
+        # AGAIN (2nd use)
         state, ts = env.step(state, _make_action(continue_flag=0))
         caravan = [int(state.caravans[0][i]) for i in range(4)]
         assert caravan == [0, 4, 1, 0], f"After 2nd: expected [0,4,1,0], got {caravan}"
 
-        # DONE (3rd use)
-        state, ts = env.step(state, _make_action(continue_flag=1))
+        # AGAIN (3rd use)
+        state, ts = env.step(state, _make_action(continue_flag=0))
         caravan = [int(state.caravans[0][i]) for i in range(4)]
         assert caravan == [0, 6, 0, 0], f"After 3rd: expected [0,6,0,0], got {caravan}"
 
-    def test_cannot_afford_after_again(self, env):
-        """Play G->RR with 1G, pick AGAIN, then DONE should not re-apply."""
+        # DONE (just exit)
+        state, ts = env.step(state, _make_action(continue_flag=1))
+        caravan = [int(state.caravans[0][i]) for i in range(4)]
+        assert caravan == [0, 6, 0, 0], f"After DONE: expected [0,6,0,0], got {caravan}"
+
+    def test_cannot_afford_after_play(self, env):
+        """Play G->RR with 1G: auto-applies, then DONE (can't afford another)."""
         state = _setup_exchange_state(env, CARD_G_RR, [0, 0, 1, 0])
 
+        # Play card 0 — auto-applies: 1G -> 2R
         state, ts = env.step(state, _make_action(action_type=0, card_idx=0))
-
-        # AGAIN (1G -> 2R)
-        state, ts = env.step(state, _make_action(continue_flag=0))
         caravan = [int(state.caravans[0][i]) for i in range(4)]
-        assert caravan == [0, 2, 0, 0]
+        assert caravan == [0, 2, 0, 0], f"After play: expected [0,2,0,0], got {caravan}"
 
         # DONE — must NOT apply again (no G left)
         state, ts = env.step(state, _make_action(continue_flag=1))

@@ -47,6 +47,7 @@ from century_env.rewards import (
     compute_step_reward,
     compute_final_reward,
     compute_winner_rewards,
+    compute_shaping_bonus,
 )
 
 
@@ -60,16 +61,25 @@ class CenturySpiceRoad(Environment):
     - Multi-discrete action space
     """
 
-    def __init__(self, num_players: int = 4):
+    def __init__(self, num_players: int = 4, reward_mode: str = "raw",
+                 pbrs_spice_coeff: float = 0.1, pbrs_hand_coeff: float = 0.5):
         """Initialize the environment.
 
         Args:
             num_players: Number of players (2-5)
+            reward_mode: "raw" for default rewards, "shaped" for PBRS
+            pbrs_spice_coeff: Weight for caravan value in potential function
+            pbrs_hand_coeff: Weight for hand size bonus in potential function
         """
         if not MIN_PLAYERS <= num_players <= MAX_PLAYERS:
             raise ValueError(f"num_players must be {MIN_PLAYERS}-{MAX_PLAYERS}, "
                            f"got {num_players}")
+        if reward_mode not in ("raw", "shaped"):
+            raise ValueError(f"reward_mode must be 'raw' or 'shaped', got '{reward_mode}'")
         self._num_players = num_players
+        self._use_reward_shaping = reward_mode == "shaped"
+        self._pbrs_spice_coeff = pbrs_spice_coeff
+        self._pbrs_hand_coeff = pbrs_hand_coeff
 
     @property
     def num_players(self) -> int:
@@ -207,6 +217,12 @@ class CenturySpiceRoad(Environment):
             lambda: jnp.float32(0.0)
         )
         total_reward = reward + final_reward
+
+        if self._use_reward_shaping:
+            total_reward = total_reward + compute_shaping_bonus(
+                state, next_state, player, is_done,
+                self._pbrs_spice_coeff, self._pbrs_hand_coeff,
+            )
 
         # Build observation for next player
         next_player = next_state.current_player

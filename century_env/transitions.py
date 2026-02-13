@@ -22,6 +22,7 @@ from century_env.cards import (
     get_card_upgrades,
     get_scoring_requirements,
     get_scoring_points,
+    can_afford_exchange,
     CARD_TYPE_SPICE,
     CARD_TYPE_CONVERSION,
     CARD_TYPE_EXCHANGE,
@@ -103,11 +104,23 @@ def _start_play(state: State, card_idx: jnp.ndarray) -> State:
         lambda: jnp.int32(0)
     )
 
+    # Exchange cards: apply the first exchange immediately
+    caravan = state.caravans[player]
+    should_exchange = (card_type == CARD_TYPE_EXCHANGE) & can_afford_exchange(caravan, card)
+    new_caravan = lax.cond(
+        should_exchange,
+        lambda c: apply_exchange(c, card),
+        lambda c: c,
+        caravan
+    )
+    new_caravans = state.caravans.at[player].set(new_caravan)
+
     return state.replace(
         hands=new_hands,
         hand_sizes=new_hand_sizes,
         played_piles=new_played_piles,
         played_sizes=new_played_sizes,
+        caravans=new_caravans,
         selected_card_idx=card_idx,
         selected_card=card,
         remaining_upgrades=upgrades,
@@ -257,15 +270,14 @@ def _execute_conversion(state: State, spice_idx: jnp.ndarray,
 def _execute_exchange(state: State, continue_flag: jnp.ndarray) -> State:
     """Execute one iteration of an exchange card.
 
-    Only applies the exchange when continue_flag == 0 (AGAIN) and affordable.
-    When continue_flag == 1 (DONE), skips the exchange and finishes immediately.
+    Only applies the exchange on AGAIN (continue_flag=0).
+    DONE (continue_flag=1) finishes without applying.
+    The first exchange is already applied in _start_play.
     """
     player = state.current_player
     caravan = state.caravans[player]
     card = state.selected_card
 
-    # Only apply on AGAIN (continue_flag=0), not on DONE (continue_flag=1)
-    from century_env.cards import can_afford_exchange
     affordable = can_afford_exchange(caravan, card)
     should_apply = affordable & (continue_flag == 0)
     new_caravan = lax.cond(

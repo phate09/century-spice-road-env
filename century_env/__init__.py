@@ -67,6 +67,9 @@ from century_env.cards import (
     can_afford_exchange,
 )
 
+# Rewards (PBRS)
+from century_env.rewards import compute_potential, compute_shaping_bonus
+
 # Environment
 from century_env.env import CenturySpiceRoad
 
