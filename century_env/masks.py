@@ -65,30 +65,39 @@ def get_action_mask(state: State) -> Tuple[jnp.ndarray, ...]:
 
 
 def _mask_choose_action(state: State) -> Tuple[jnp.ndarray, ...]:
-    """Mask for CHOOSE_ACTION phase - which of 4 actions are legal."""
+    """Mask for CHOOSE_ACTION phase - which of 4 actions are legal.
+
+    Because transition_choose_action reads sub-action heads (card_idx,
+    market_pos, scoring_idx) from the same action array, these heads
+    must carry valid masks — not zeros.
+    """
     player = state.current_player
     caravan = state.caravans[player]
     hand_size = state.hand_sizes[player]
     played_size = state.played_sizes[player]
 
-    # Play: legal if has cards in hand
+    # --- Head 0: action_type ---
     can_play = hand_size > 0
-
-    # Acquire: always legal (position 0 is free)
     can_acquire = jnp.bool_(True)
-
-    # Rest: legal only if has played cards
     can_rest = played_size > 0
-
-    # Score: legal if any scoring card is affordable
     can_score = _any_scoring_affordable(state, player)
-
     action_type_mask = jnp.array([can_play, can_acquire, can_rest, can_score])
 
-    # Other masks are all False (not used in this phase)
-    card_idx_mask = jnp.zeros(MAX_PLAYER_CARDS, dtype=jnp.bool_)
-    market_pos_mask = jnp.zeros(NUM_MARKET_SLOTS, dtype=jnp.bool_)
-    scoring_idx_mask = jnp.zeros(NUM_SCORING_SLOTS, dtype=jnp.bool_)
+    # --- Head 1: card_idx (for Play) ---
+    card_indices = jnp.arange(MAX_PLAYER_CARDS)
+    card_idx_mask = card_indices < hand_size
+
+    # --- Head 2: market_pos (for Acquire) ---
+    total_spices = caravan_total(caravan)
+    positions = jnp.arange(NUM_MARKET_SLOTS)
+    can_afford = positions <= total_spices
+    is_valid_pos = positions < state.market_size
+    market_pos_mask = can_afford & is_valid_pos
+
+    # --- Head 3: scoring_idx (for Score) ---
+    scoring_idx_mask = _get_affordable_scoring_mask(state, caravan)
+
+    # --- Heads 4–5: not used in CHOOSE_ACTION ---
     spice_type_mask = jnp.zeros(NUM_SPICE_TYPES, dtype=jnp.bool_)
     continue_mask = jnp.zeros(NUM_CONTINUE_FLAGS, dtype=jnp.bool_)
 

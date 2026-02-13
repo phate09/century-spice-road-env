@@ -59,6 +59,54 @@ class TestChooseActionMask:
         assert bool(action_type_mask[ActionType.REST])
 
 
+    def test_card_idx_mask_matches_hand(self, initial_state_4p):
+        """card_idx mask should reflect hand size at game start."""
+        masks = get_action_mask(initial_state_4p)
+        card_idx_mask = masks[1]
+        # Player 0 starts with 2 cards
+        assert bool(card_idx_mask[0])
+        assert bool(card_idx_mask[1])
+        assert not bool(card_idx_mask[2])
+
+    def test_market_pos_mask_affordable(self, initial_state_4p):
+        """market_pos mask should reflect affordable positions."""
+        masks = get_action_mask(initial_state_4p)
+        market_mask = masks[2]
+        # Player 0 starts with 3 yellow spices -> can afford positions 0-3
+        assert bool(market_mask[0])
+        assert bool(market_mask[1])
+        assert bool(market_mask[2])
+        assert bool(market_mask[3])
+        assert not bool(market_mask[4])
+        assert not bool(market_mask[5])
+
+    def test_scoring_idx_mask_populated(self, initial_state_4p):
+        """scoring_idx mask should reflect affordable scoring cards."""
+        # With only 3 yellow, most scoring cards are unaffordable
+        masks = get_action_mask(initial_state_4p)
+        scoring_mask = masks[3]
+
+        # Give player a rich caravan and check again
+        caravan = jnp.array([5, 5, 5, 5], dtype=jnp.int32)
+        caravans = initial_state_4p.caravans.at[0].set(caravan)
+        rich_state = initial_state_4p.replace(caravans=caravans)
+        masks_rich = get_action_mask(rich_state)
+        scoring_mask_rich = masks_rich[3]
+        assert bool(jnp.any(scoring_mask_rich)), (
+            "With a full caravan, at least one scoring card should be affordable"
+        )
+
+        # With zero spices, nothing should be affordable
+        empty_caravan = jnp.zeros(4, dtype=jnp.int32)
+        caravans_empty = initial_state_4p.caravans.at[0].set(empty_caravan)
+        poor_state = initial_state_4p.replace(caravans=caravans_empty)
+        masks_poor = get_action_mask(poor_state)
+        scoring_mask_poor = masks_poor[3]
+        assert not bool(jnp.any(scoring_mask_poor)), (
+            "With zero spices, no scoring card should be affordable"
+        )
+
+
 class TestMarketMask:
     def test_position_0_always_affordable(self, initial_state_4p):
         """Position 0 requires 0 spices, always affordable."""
